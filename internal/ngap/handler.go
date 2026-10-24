@@ -1566,6 +1566,39 @@ func handleHandoverRequestAcknowledgeMain(ran *context.AmfRan,
 		return
 	}
 
+	// The source N2 connection was released while the target prepared the
+	// handover, so there is no source to send the HANDOVER COMMAND to and the
+	// handover cannot be executed. Cancel it as for a HANDOVER CANCEL
+	// (TS 23.502 4.9.1.4 and 4.11.1.2.3): end the handover preparation at the
+	// SMFs and release the resources reserved in the target NG-RAN node.
+	if sourceUe := targetUe.SourceUe; sourceUe == nil || sourceUe.AmfUe == nil {
+		targetUe.Log.Warn("Source NG-RAN connection released during handover preparation: cancel the handover")
+		cause := ngapType.Cause{Choice: &ngapType.CauseRadioNetwork{
+			Value: ngapType.CauseRadioNetworkPresentHandoverCancelled,
+		}}
+		hoFailCause = ngap.GetCauseErrorStr(&cause)
+		causeAll := context.CauseAll{NgapCause: &models.NgApCause{
+			Group: int32(ngap_message.CauseChoiceRadioNetwork),
+			Value: int32(ngapType.CauseRadioNetworkPresentHandoverCancelled),
+		}}
+		amfUe.SmContextList.Range(func(key, value interface{}) bool {
+			smContext := value.(*context.SmContext)
+			_, _, _, err := consumer.GetConsumer().SendUpdateSmContextN2HandoverCanceled(amfUe, smContext, causeAll)
+			if err != nil {
+				targetUe.Log.Errorf("Send UpdateSmContextN2HandoverCanceled Error for pduSessionID[%d]", key.(int32))
+			}
+			return true
+		})
+		if amfUe.OnGoing(ran.AnType).Procedure == context.OnGoingProcedureN2Handover {
+			amfUe.SetOnGoing(ran.AnType, &context.OnGoing{Procedure: context.OnGoingProcedureNothing})
+		}
+		context.DetachSourceUeTargetUe(targetUe)
+		targetUe.DetachAmfUe()
+		ngap_message.SendUEContextReleaseCommand(targetUe, context.UeContextReleaseHandover,
+			ngap_message.CauseChoiceRadioNetwork, ngapType.CauseRadioNetworkPresentHandoverCancelled)
+		return
+	}
+
 	var pduSessionResourceHandoverList ngapType.PDUSessionResourceHandoverList
 	var pduSessionResourceToReleaseList ngapType.PDUSessionResourceToReleaseListHOCmd
 
