@@ -72,7 +72,7 @@ func SendNotification(ue *context.RanUe, nasMsg []byte) {
 	if context.GetSelf().T3565Cfg.Enable {
 		cfg := context.GetSelf().T3565Cfg
 		amfUe.GmmLog.Infof("Start T3565 timer")
-		amfUe.T3565 = context.NewTimer(cfg.ExpireTime, cfg.MaxRetryTimes, func(expireTimes int32) {
+		amfUe.StartT3565(cfg, func(expireTimes int32) {
 			amfUe.GmmLog.Warnf("T3565 expires, retransmit Notification (retry: %d)", expireTimes)
 			timerAdditionalCause := "Timer expired, retransmit Notification"
 			isNasMsgSent = true
@@ -80,7 +80,6 @@ func SendNotification(ue *context.RanUe, nasMsg []byte) {
 			ngap_message.SendDownlinkNasTransport(ue, nasMsg, nil)
 		}, func() {
 			amfUe.GmmLog.Warnf("T3565 Expires %d times, abort notification procedure", cfg.MaxRetryTimes)
-			amfUe.T3565 = nil // clear the timer
 			if amfUe.OnGoing(models.AccessType_3_GPP_ACCESS).Procedure != context.OnGoingProcedureN2Handover {
 				callback.SendN1N2TransferFailureNotification(amfUe, models.Amf_Comm_N1N2MessageTransferCause_UE_NOT_RESPONDING)
 			}
@@ -120,7 +119,7 @@ func SendIdentityRequest(ue *context.RanUe, accessType models.AccessType, typeOf
 
 	if context.GetSelf().T3570Cfg.Enable {
 		cfg := context.GetSelf().T3570Cfg
-		amfUe.T3570 = context.NewTimer(cfg.ExpireTime, cfg.MaxRetryTimes, func(expireTimes int32) {
+		amfUe.StartT3570(cfg, func(expireTimes int32) {
 			amfUe.GmmLog.Warnf("T3570 expires, retransmit Identity Request (retry: %d)", expireTimes)
 			timerAdditionalCause := "Timer expired, retransmit Identity Request"
 			defer nasMetrics.IncrMetricsSentNasMsgs(nasMetrics.IDENTITY_REQUEST, &isNasMsgSent, 0, &timerAdditionalCause)
@@ -176,7 +175,7 @@ func SendAuthenticationRequest(ue *context.RanUe) {
 	if context.GetSelf().T3560Cfg.Enable {
 		cfg := context.GetSelf().T3560Cfg
 		amfUe.GmmLog.Infof("Start T3560 timer")
-		amfUe.T3560 = context.NewTimer(cfg.ExpireTime, cfg.MaxRetryTimes, func(expireTimes int32) {
+		amfUe.StartT3560(cfg, func(expireTimes int32) {
 			amfUe.GmmLog.Warnf("T3560 expires, retransmit Authentication Request (retry: %d)", expireTimes)
 			timerAdditionalCause := "Timer expired, retry authentication request"
 			defer nasMetrics.IncrMetricsSentNasMsgs(nasMetrics.AUTHENTICATION_REQUEST, &isNasMsgSent, 0, &timerAdditionalCause)
@@ -187,7 +186,6 @@ func SendAuthenticationRequest(ue *context.RanUe) {
 
 			amfUe.GmmLog.Warnf("T3560 Expires %d times, abort authentication procedure & ongoing 5GMM procedure",
 				cfg.MaxRetryTimes)
-			amfUe.T3560 = nil
 			gmm_common.RemoveAmfUe(amfUe, false)
 		})
 	}
@@ -265,7 +263,7 @@ func SendConfigurationUpdateCommand(amfUe *context.AmfUe,
 	if startT3555 && context.GetSelf().T3555Cfg.Enable {
 		cfg := context.GetSelf().T3555Cfg
 		amfUe.GmmLog.Infof("Start T3555 timer")
-		amfUe.T3555 = context.NewTimer(cfg.ExpireTime, cfg.MaxRetryTimes, func(expireTimes int32) {
+		amfUe.StartT3555(cfg, func(expireTimes int32) {
 			amfUe.GmmLog.Warnf("T3555 expires, retransmit Configuration Update Command (retry: %d)",
 				expireTimes)
 			timerAdditionalCause := "Timer expired, retry configuration update command"
@@ -463,7 +461,7 @@ func SendSecurityModeCommand(ue *context.RanUe, accessType models.AccessType, ea
 	if context.GetSelf().T3560Cfg.Enable {
 		cfg := context.GetSelf().T3560Cfg
 		amfUe.GmmLog.Infof("Start T3560 timer")
-		amfUe.T3560 = context.NewTimer(cfg.ExpireTime, cfg.MaxRetryTimes, func(expireTimes int32) {
+		amfUe.StartT3560(cfg, func(expireTimes int32) {
 			amfUe.GmmLog.Warnf("T3560 expires, retransmit Security Mode Command (retry: %d)", expireTimes)
 			timerAdditionalCause := "Retry Security Mode Command"
 			defer nasMetrics.IncrMetricsSentNasMsgs(nasMetrics.SECURITY_MODE_COMMAND, &isNasMsgSent, 0, &timerAdditionalCause)
@@ -473,7 +471,6 @@ func SendSecurityModeCommand(ue *context.RanUe, accessType models.AccessType, ea
 			defer amfUe.Lock.Unlock()
 
 			amfUe.GmmLog.Warnf("T3560 Expires %d times, abort security mode control procedure", cfg.MaxRetryTimes)
-			amfUe.T3560 = nil
 			gmm_common.RemoveAmfUe(amfUe, false)
 		})
 	}
@@ -501,12 +498,11 @@ func SendDeregistrationRequest(ue *context.RanUe, accessType uint8, reRegistrati
 	if context.GetSelf().T3522Cfg.Enable {
 		cfg := context.GetSelf().T3522Cfg
 		amfUe.GmmLog.Infof("Start T3522 timer")
-		amfUe.T3522 = context.NewTimer(cfg.ExpireTime, cfg.MaxRetryTimes, func(expireTimes int32) {
+		amfUe.StartT3522(cfg, func(expireTimes int32) {
 			amfUe.GmmLog.Warnf("T3522 expires, retransmit Deregistration Request (retry: %d)", expireTimes)
 			ngap_message.SendDownlinkNasTransport(ue, nasMsg, nil)
 		}, func() {
 			amfUe.GmmLog.Warnf("T3522 Expires %d times, abort deregistration procedure", cfg.MaxRetryTimes)
-			amfUe.T3522 = nil // clear the timer
 			switch accessType {
 			case ie.AccessType_3gpp:
 				amfUe.GmmLog.Warnln("UE accessType[3GPP] transfer to Deregistered state")
@@ -604,10 +600,15 @@ func SendRegistrationAccept(
 	if context.GetSelf().T3550Cfg.Enable {
 		cfg := context.GetSelf().T3550Cfg
 		amfUe.GmmLog.Infof("Start T3550 timer")
-		amfUe.T3550 = context.NewTimer(cfg.ExpireTime, cfg.MaxRetryTimes, func(expireTimes int32) {
+		amfUe.StartT3550(cfg, func(expireTimes int32, abort func() bool) {
 			if amfUe.GetRanUe(anType) == nil {
-				amfUe.GmmLog.Warnf("[NAS] UE Context released, abort retransmission of Registration Accept")
-				amfUe.T3550 = nil
+				// TS 24.501 5.5.1.2.8 case a, 5.5.1.3.8 case a: after a lower layer failure, abort the
+				// procedure, enter 5GMM-REGISTERED and do not resend the Registration Accept
+				if abort() {
+					amfUe.GmmLog.Warnf("[NAS] UE Context released, abort retransmission of Registration Accept")
+					amfUe.State[anType].Set(context.Registered)
+					amfUe.ClearRegistrationRequestData(anType)
+				}
 			} else {
 				amfUe.GmmLog.Warnf("T3550 expires, retransmit Registration Accept (retry: %d)", expireTimes)
 				timerAdditionalCause := "Retry Registration Accept"
@@ -617,7 +618,6 @@ func SendRegistrationAccept(
 			}
 		}, func() {
 			amfUe.GmmLog.Warnf("T3550 Expires %d times, abort retransmission of Registration Accept", cfg.MaxRetryTimes)
-			amfUe.T3550 = nil // clear the timer
 			// TS 24.501 5.5.1.2.8 case c, 5.5.1.3.8 case c
 			amfUe.State[anType].Set(context.Registered)
 			amfUe.ClearRegistrationRequestData(anType)
